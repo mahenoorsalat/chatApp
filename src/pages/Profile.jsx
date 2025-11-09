@@ -9,7 +9,7 @@ export default function Profile({ user, setUser }) {
   const handleSave = async (e) => {
     e.preventDefault();
     try{
-      const res = await axios.post("http://localhost:5000/api/user/profile", { name, bio, photo } , {
+      const res = await axios.post("http://localhost:5000/api/user/profile", { username:name, bio, phtoUrl : photo } , {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
