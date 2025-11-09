@@ -1,14 +1,28 @@
 import { useState } from "react";
+import axios from "axios";
 
 export default function Profile({ user, setUser }) {
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [photo, setPhoto] = useState(user?.photo || "");
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    setUser({ ...user, name, bio, photo });
-    alert("✅ Profile updated successfully!");
+    try{
+      const res = await axios.post("http://localhost:5000/api/user/profile", { name, bio, photo } , {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      console.log(res.data);
+
+      setUser({ ...user, name, bio, photo });
+          alert("✅ Profile updated successfully!");
+
+    }catch (err) {
+      console.error(err.response?.data || err.message);
+      alert("❌ Failed to update profile. Please try again.");
+    }
   };
 
   return (
