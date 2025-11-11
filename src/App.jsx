@@ -11,7 +11,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading , setLoading] = useState(false);
 
-  useEffect(() => {
+useEffect(() => {
       const token = localStorage.getItem("token");
       if(token){
         const fetchUser = async () => {
@@ -20,8 +20,8 @@ export default function App() {
             const res = await axios.get("http://localhost:5000/api/user/profile" , {
               headers : { Authorization : `Bearer ${token}` }
             });
-            const data = await res.json();
-            setUser(data.user);
+            // FIX: Access the data directly from res.data
+            setUser(res.data.user);
           }
           catch(err){
             console.error("Failed to fetch user profile:", err);
@@ -48,9 +48,6 @@ export default function App() {
     );
   }
       
-
-
-
   return (
     <div className="min-h-screen bg-gray-100">
       <Navbar user={user} setUser={setUser} />
