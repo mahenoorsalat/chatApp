@@ -9,7 +9,8 @@ export default function Profile({ user, setUser }) {
   const handleSave = async (e) => {
     e.preventDefault();
     try{
-      const res = await axios.post("http://localhost:5000/api/user/profile", { username:name, bio, phtoUrl : photo } , {
+      // FIX: Changed 'phtoUrl' to 'photoUrl' to match the backend controller
+      const res = await axios.post("http://localhost:5000/api/user/profile", { username:name, bio, photoUrl : photo } , { 
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
