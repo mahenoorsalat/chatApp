@@ -2,22 +2,24 @@ import { useState } from "react";
 import axios from "axios";
 
 export default function Profile({ user, setUser }) {
-  const [name, setName] = useState(user?.name || "");
+  // FIXED: Initialize state using consistent keys 'username' and 'photoUrl'
+  const [name, setName] = useState(user?.username || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [photo, setPhoto] = useState(user?.photo || "");
+  const [photoUrl, setPhotoUrl] = useState(user?.photoUrl || ""); // Renamed state variable
 
   const handleSave = async (e) => {
     e.preventDefault();
     try{
-      // FIX: Changed 'phtoUrl' to 'photoUrl' to match the backend controller
-      const res = await axios.post("http://localhost:5000/api/user/profile", { username:name, bio, photoUrl : photo } , { 
+      // FIXED: Send 'photoUrl' field correctly, using the new state variable name
+      const res = await axios.post("http://localhost:5000/api/user/profile", { username:name, bio, photoUrl: photoUrl } , { 
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
       console.log(res.data);
 
-      setUser({ ...user, name, bio, photo });
+      // FIXED: Update local user state with consistent keys to instantly reflect changes
+      setUser({ ...user, username: name, bio, photoUrl });
           alert("✅ Profile updated successfully!");
 
     }catch (err) {
@@ -36,7 +38,8 @@ export default function Profile({ user, setUser }) {
       <div className="flex flex-col items-center mb-5">
         <img
           src={
-            photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+            // FIXED: Use photoUrl state
+            photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png"
           }
           alt="Profile"
           className="w-24 h-24 rounded-full object-cover border mb-3"
@@ -45,8 +48,8 @@ export default function Profile({ user, setUser }) {
           type="url"
           placeholder="Profile photo URL"
           className="w-full border p-2 rounded-md text-sm"
-          value={photo}
-          onChange={(e) => setPhoto(e.target.value)}
+          value={photoUrl} // FIXED: Use photoUrl state
+          onChange={(e) => setPhotoUrl(e.target.value)} // FIXED: Use setPhotoUrl
         />
       </div>
 

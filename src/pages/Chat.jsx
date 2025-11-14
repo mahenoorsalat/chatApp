@@ -28,11 +28,15 @@ const UserList = ({ currentUser, users, selectUser, selectedUser }) => {
               }`}
             >
               <img
-                src={u.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
+                // FIXED: Use 'photoUrl' for consistency
+                src={u.photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
                 alt="avatar"
                 className="w-8 h-8 rounded-full object-cover mr-3"
               />
-              <span className="font-medium truncate">{u.name}</span>
+              <span className="font-medium truncate">
+                {/* FIXED: Use 'username' for consistency */}
+                {u.username}
+              </span>
             </li>
           ))
         )}
@@ -43,40 +47,37 @@ const UserList = ({ currentUser, users, selectUser, selectedUser }) => {
 
 // --- Chat Component (Parent) ---
 export default function Chat({ user }) {
-  // State for messages in the currently selected chat
   const [messages, setMessages] = useState([]);
   const [msg, setMsg] = useState("");
-  const [allUsers, setAllUsers] = useState([]); // NEW: State for all users
-  const [selectedUser, setSelectedUser] = useState(null); // NEW: State for selected chat partner
+  const [allUsers, setAllUsers] = useState([]); 
+  const [selectedUser, setSelectedUser] = useState(null); 
   const scrollRef = useRef(null);
+  const [onlineUsers , setOnlineUsers] = useState([]);
 
-  // Function to select a user
   const handleSelectUser = (u) => {
     setSelectedUser(u);
-    setMessages([]); // Clear messages when switching users
+    setMessages([]); 
   };
   
   // 1. Fetch All Users on Component Load
   useEffect(() => {
-    const fetchAllUsers = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
+const fetchUsers = async () => {
+   const token = localStorage.getItem("token");
+   try{
+      const res = await axios.get("http://localhost:5000/api/user/all", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAllUsers(res.data.users);
+    }catch(err){
+      console.error("Error fetching users:", err);
+      setAllUsers([]);
+    }
+  };
+  if(user){
+    fetchUsers();
+   }
 
-      try {
-        // NOTE: This assumes you create a new backend endpoint /api/user/all
-        const res = await axios.get("http://localhost:5000/api/user/all", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        // The API should return an array of user objects: [{ id, name, photo }]
-        setAllUsers(res.data.users); 
-      } catch (err) {
-        console.error("Error fetching users:", err);
-      }
-    };
-
-    fetchAllUsers();
-  }, [user]); // Re-run if the current user object changes
+  }, [user]);
 
   // 2. Fetch Private Chat History when selectedUser changes
   useEffect(() => {
@@ -85,19 +86,12 @@ export default function Chat({ user }) {
     const fetchPrivateHistory = async () => {
         const token = localStorage.getItem("token");
         try {
-            // NOTE: This assumes a new backend route for private history
             const res = await axios.get(`http://localhost:5000/api/chat/history/private/${selectedUser.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
-            // Map the fetched data structure
-            const history = res.data.map(m => ({
-                text: m.content,
-                // Determine who sent the message for styling/display
-                user: m.sender.username, 
-                userPhoto: m.sender.photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-            }));
-            setMessages(history);
+  
+            setMessages(res.data);
 
         } catch (err) {
             console.error("Error fetching private chat history:", err);
@@ -112,20 +106,15 @@ export default function Chat({ user }) {
   useEffect(() => {
     if (!user) return;
 
-    // A. Inform the server of the current user's socket ID (for private messaging)
     socket.emit('setOnline', user.id); 
 
-    // B. Listen for private messages (from the selected user)
     socket.on('privateMessage', (m) => {
-        // Only show messages that are from the currently selected user
-        // OR messages that the current user sent (which the server echoes back)
-        if (m.senderId === selectedUser?.id || m.recipientId === selectedUser?.id) {
-            const newMessage = {
-                text: m.content,
-                user: m.senderName,
-                userPhoto: m.senderPhoto || "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-            };
-            setMessages((prev) => [...prev, newMessage]);
+      
+        const isFromSelectedUser = m.sender._id === selectedUser?.id;
+        const isToSelectedUser = m.recipient?._id === selectedUser?.id;
+
+        if (isFromSelectedUser || (m.sender._id === user.id && isToSelectedUser)) {
+            setMessages((prev) => [...prev, m]);
         }
     });
 
@@ -133,12 +122,26 @@ export default function Chat({ user }) {
     return () => {
         socket.off('privateMessage');
     };
-  }, [user, selectedUser]); // Dependent on user and which chat is open
+  }, [user, selectedUser]); // Keep selectedUser here to ensure the listener uses the correct closure for filtering
 
   // Scroll to bottom on message update
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+
+useEffect(() => {
+    socket.on("onlineUsers", (users) => {
+      setOnlineUsers(users);
+    });
+
+    return ()=> socket.off("onlineUsers");
+  }, []);
+
+  const availableUser = ()=>{
+    if(!selectedUser) return "";
+    return onlineUsers.includes(selectedUser.id) ? "Online" : "Offline";
+  }
 
   // --- Send Message Logic ---
   const sendMessage = (e) => {
@@ -149,22 +152,15 @@ export default function Chat({ user }) {
     const messageData = {
       content: messageContent,
       senderId: user.id,
-      senderName: user.name || "Anonymous",
-      senderPhoto: user.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-      recipientId: selectedUser.id, // NEW: Include recipient ID
-      recipientName: selectedUser.name,
+      // FIXED: Use 'username' and 'photoUrl' consistently
+      senderName: user.username || "Anonymous",
+      senderPhoto: user.photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png", 
+      recipientId: selectedUser.id, 
+      recipientName: selectedUser.username,
     };
     
     // Emit the message to the server's private message event
-    // NOTE: This assumes you change the backend socket event name to 'sendPrivateMessage'
     socket.emit('sendPrivateMessage', messageData);
-
-    // Optimistically add the message to the sender's local state
-    setMessages((prev) => [...prev, {
-        text: messageContent,
-        user: messageData.senderName,
-        userPhoto: messageData.senderPhoto,
-    }]);
 
     setMsg("");
   };
@@ -175,54 +171,64 @@ export default function Chat({ user }) {
       
       <UserList 
         currentUser={user} 
-        users={allUsers} // Use the fetched users
+        users={allUsers} 
         selectUser={handleSelectUser} 
         selectedUser={selectedUser} 
       />
 
       {/* Main Chat Area */}
       <div className="flex-1 p-5 flex flex-col">
-        <h2 className="text-xl font-bold mb-4 text-center border-b pb-2 text-gray-800">
-            {selectedUser ? `💬 Chat with ${selectedUser.name}` : "Select a user to begin"}
-        </h2>
+       <h2 className="text-xl font-bold mb-4 text-center border-b pb-2 text-gray-800">
+  {selectedUser 
+      ? `💬 Chat with ${selectedUser.username} — ${availableUser()}` 
+      : "Select a user to begin"}
+</h2>
+
         
         {selectedUser ? (
           <>
             <div className="flex-1 overflow-y-auto border border-gray-200 p-3 rounded-lg bg-gray-50 mb-4">
               {messages.length === 0 ? (
-                <p className="text-center text-gray-500 italic mt-10">Say hello to {selectedUser.name}!</p>
+                // FIXED: Use 'username'
+                <p className="text-center text-gray-500 italic mt-10">Say hello to {selectedUser.username}!</p>
               ) : (
                 messages.map((m, i) => (
                   <div
                     key={i}
+                    // FIXED: Check against sender's ID (m.sender._id) as that is populated from the DB
                     className={`flex items-start gap-2 mb-3 ${
-                      m.user === user?.name ? "justify-end" : ""
+                      m.sender._id === user?.id ? "justify-end" : ""
                     }`}
                   >
                     {/* Show recipient's avatar on the left */}
-                    {m.user !== user?.name && ( 
+                    {/* FIXED: Check against sender's ID */}
+                    {m.sender._id !== user?.id && ( 
                       <img
-                        src={m.userPhoto}
+                        src={m.sender.photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
                         alt="avatar"
                         className="w-8 h-8 rounded-full object-cover"
                       />
                     )}
                     <div
                       className={`p-2 rounded-lg max-w-[75%] ${
-                        m.user === user?.name
+                        // FIXED: Check against sender's ID
+                        m.sender._id === user?.id
                           ? "bg-blue-600 text-white"
                           : "bg-gray-200 text-gray-800"
                       }`}
                     >
                       <strong className="block text-xs font-semibold">
-                          {m.user === user?.name ? "You" : m.user}
+                          {/* FIXED: Use sender's username */}
+                          {m.sender._id === user?.id ? "You" : m.sender.username}
                       </strong>
-                      <span>{m.text}</span>
+                      {/* FIXED: Use 'content' */}
+                      <span>{m.content}</span> 
                     </div>
                     {/* Show current user's avatar on the right */}
-                    {m.user === user?.name && ( 
+                    {/* FIXED: Check against sender's ID */}
+                    {m.sender._id === user?.id && ( 
                       <img
-                        src={m.user?.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
+                        src={user.photoUrl || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
                         alt="avatar"
                         className="w-8 h-8 rounded-full object-cover"
                       />
@@ -236,7 +242,8 @@ export default function Chat({ user }) {
             <form onSubmit={sendMessage} className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder={`Type your message to ${selectedUser.name}...`}
+                // FIXED: Use 'username'
+                placeholder={`Type your message to ${selectedUser.username}...`}
                 className="flex-1 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
